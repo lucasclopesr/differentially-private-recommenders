@@ -48,7 +48,7 @@ else:
 
 rmse_cases = {}
 
-kfold = KFold(n_splits=10)
+kfold = KFold(n_splits=5)
 count = 0
 rmse = 0
 for train_idx, test_idx in kfold.split(X):
@@ -67,15 +67,15 @@ for train_idx, test_idx in kfold.split(X):
     X_test['rating'] = y_test
     X_test['prediction'] = pred
     X_test.to_csv(f"tests/MF_test_{count}.csv",encoding='utf-8', index=False)
-rmse_cases['standard'] = rmse/10
+rmse_cases['standard'] = rmse/5
 
-privacies = [3,10,100,1000]
+privacies = [3,10,100,1000, 10000, 100000, 1000000]
 template = 'private_slice_ratings_'
 
 for privacy in privacies:
     file = f"../data/{template}{privacy}.csv"
     # print(f"On file: {file}:\n")
-    df = pd.read_csv(file, index_col=0)
+    df = pd.read_csv(file)
     cols = ['user_id','item_id', 'old_rating','timestamp','Counts Users', 'Counts Items', 'rating']
     df.columns = cols
     df.drop(['Counts Users','Counts Items'], axis=1,inplace=True )
@@ -84,24 +84,27 @@ for privacy in privacies:
     Y = df['rating']
     y = df['old_rating']
 
-    kfold = KFold(n_splits=10)
-    count = 0
-    rmse = 0
-    for train_idx, test_idx in kfold.split(X):
-        count +=1
-        X_train = X.loc[train_idx].copy()
-        y_train = Y.loc[train_idx].copy()
-        X_test = X.loc[test_idx].copy()
-        y_test = y.loc[test_idx].copy()
+    kfold = KFold(n_splits=5)
+    rmse_cases[f"P{privacy}"] = 0
+    for i in range(10):
+        count = 0
+        rmse = 0
+        for train_idx, test_idx in kfold.split(X):
+            count +=1
+            X_train = X.loc[train_idx].copy()
+            y_train = Y.loc[train_idx].copy()
+            X_test = X.loc[test_idx].copy()
+            y_test = y.loc[test_idx].copy()
 
-        # Initial training
-        matrix_fact = KernelMF(n_epochs=hparam['n_epochs'], n_factors=hparam['n_factors'], verbose=0, lr=hparam['lr'], reg=hparam['reg'])
-        matrix_fact.fit(X_train, y_train)
+            # Initial training
+            matrix_fact = KernelMF(n_epochs=hparam['n_epochs'], n_factors=hparam['n_factors'], verbose=0, lr=hparam['lr'], reg=hparam['reg'])
+            matrix_fact.fit(X_train, y_train)
 
-        pred = matrix_fact.predict(X_test)
-        rmse += mean_squared_error(y_test, pred, squared=False)
-        X_test['rating'] = y_test
-        X_test['prediction'] = pred
-        X_test.to_csv(f"tests/MF_P{privacy}_test_{count}.csv",encoding='utf-8', index=False)
-    rmse_cases[f"P{privacy}"] = rmse/10
+            pred = matrix_fact.predict(X_test)
+            rmse += mean_squared_error(y_test, pred, squared=False)
+            X_test['rating'] = y_test
+            X_test['prediction'] = pred
+            X_test.to_csv(f"tests/MF_P{privacy}_test_{count}.csv",encoding='utf-8', index=False)
+        rmse_cases[f"P{privacy}"] += rmse/5
+    rmse_cases[f"P{privacy}"] = rmse_cases[f"P{privacy}"]/10
 print(rmse_cases)
